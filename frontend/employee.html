@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Employee Dashboard</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    .card {
+      background: #fff;
+      padding: 20px;
+      margin: 20px;
+      border-radius: 8px;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.05);
+    }
+
+    textarea {
+      width: 100%;
+      padding: 10px;
+      border-radius: 5px;
+      border: 1px solid #ccc;
+      margin-top: 10px;
+    }
+
+    button {
+      padding: 10px 15px;
+      border: none;
+      background: #2563eb;
+      color: white;
+      border-radius: 5px;
+      cursor: pointer;
+      margin-top: 10px;
+    }
+
+    .message {
+      margin-top: 10px;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+
+<div class="dashboard">
+  <div class="navbar">
+    <h2>Employee Dashboard</h2>
+    <button onclick="logout()">Logout</button>
+  </div>
+
+  <!-- Status Card -->
+  <div class="card">
+    <h3>Your Access Status</h3>
+    <p id="status">Loading...</p>
+  </div>
+
+  <div class="card">
+  <h3>Create Request</h3>
+
+  <button onclick="showRequestForm()">Create Request</button>
+
+  <div>
+  <div id="requestForm" style="display:none; margin-top:15px;">
+    
+
+    <label>Reason</label>
+    <textarea id="reason" rows="4" placeholder="Enter reason"></textarea>
+
+    <button onclick="submitRequest()">Submit</button>
+
+    <p id="requestMessage" style="margin-top:10px;"></p>
+    <div class="card">
+  
+  </div>
+ 
+  </div>
+</div>
+ <div class="card">
+  <h3>My Requests</h3>
+  <button onclick="loadMyRequests()">Show Requests</button>
+  <div id="myRequests" style="margin-top:15px;"></div>
+</div>
+</div>
+
+<script>
+const token = localStorage.getItem("token");
+
+if (!token) {
+  window.location.href = "login.html";
+}
+
+// ================= LOAD STATUS =================
+async function loadStatus() {
+  try {
+    const res = await fetch("http://localhost:3000/requests/status", {
+      headers: { "Authorization": "Bearer " + token }
+    });
+
+    if (res.status === 401) {
+      logout();
+      return;
+    }
+
+    const data = await res.json();
+    document.getElementById("status").innerText = data.status;
+
+    // Hide request card if revoked
+    if (data.status === "REVOKED") {
+      document.querySelector(".card:nth-of-type(2)").style.display = "none";
+    }
+
+  } catch (err) {
+    console.error(err);
+    alert("Failed to load status");
+  }
+}
+
+// ================= SHOW FORM =================
+function showRequestForm() {
+  document.getElementById("requestForm").style.display = "block";
+}
+
+// ================= SUBMIT REQUEST =================
+async function submitRequest() {
+  const reason = document.getElementById("reason").value.trim();
+  const messageBox = document.getElementById("requestMessage");
+
+  if (!reason) {
+    messageBox.innerText = "Reason is required";
+    messageBox.style.color = "red";
+    return;
+  }
+
+  try {
+    const res = await fetch("http://localhost:3000/requests/create", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer " + token
+      },
+      body: JSON.stringify({ reason })
+    });
+
+    if (res.status === 401) {
+      logout();
+      return;
+    }
+
+    const data = await res.json();
+
+    if (res.ok) {
+      messageBox.innerText = data.message;
+      messageBox.style.color = "green";
+      document.getElementById("reason").value = "";
+    } else {
+      messageBox.innerText = data.message;
+      messageBox.style.color = "red";
+    }
+
+  } catch (err) {
+    console.error(err);
+    messageBox.innerText = "Server error";
+    messageBox.style.color = "red";
+  }
+}
+
+// ================= LOGOUT =================
+function logout() {
+  localStorage.removeItem("token");
+  window.location.href = "login.html";
+}
+
+// Initial load
+loadStatus();
+
+async function loadMyRequests() {
+  const container = document.getElementById("myRequests");
+  container.innerHTML = "Loading...";
+
+  try {
+    const res = await fetch("http://localhost:3000/requests/my-requests", {
+      headers: { "Authorization": "Bearer " + token }
+    });
+
+    if (res.status === 401) {
+      logout();
+      return;
+    }
+
+    const data = await res.json();
+
+    if (data.requests.length === 0) {
+      container.innerHTML = "<p>No requests found.</p>";
+      return;
+    }
+
+    container.innerHTML = "";
+
+    data.requests.forEach(req => {
+
+      let statusColor = "orange";
+      if (req.status === "APPROVED") statusColor = "green";
+      if (req.status === "REJECTED") statusColor = "red";
+
+      container.innerHTML += `
+        <div style="border:1px solid #ddd; padding:10px; margin-bottom:10px; border-radius:5px;">
+          <p><strong>Reason:</strong> ${req.reason}</p>
+          <p><strong>Status:</strong> 
+            <span style="color:${statusColor}; font-weight:bold;">
+              ${req.status}
+            </span>
+          </p>
+          <p><strong>Admin Reply:</strong> ${req.adminReply || "No reply yet"}</p>
+          <p><strong>Submitted On:</strong> ${new Date(req.createdAt).toLocaleString()}</p>
+        </div>
+      `;
+    });
+
+  } catch (err) {
+    console.error(err);
+    container.innerHTML = "<p style='color:red;'>Failed to load requests</p>";
+  }
+}
+</script>
+</body>
+</html>
